@@ -95,3 +95,7 @@ web/private/scripts/quicksilver
 # pantheon-systems/composer-scaffold. This should not be moved or removed or it
 # could prevent the site from working correctly.
 /autoload.php
+
+# IDE
+.vscode
+.idea
