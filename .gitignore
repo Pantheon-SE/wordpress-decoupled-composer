@@ -63,13 +63,15 @@ web/app/mu-plugins/*/
 # !web/app/plugins/my-plugin
 web/app/plugins/*
 !web/app/plugins/.gitkeep
+!web/app/plugins/custom
 
 # Themes
 # We don't ignore all themes by default as these are most commonly where a
 # bulk of a site's custom code may be. However, we do ignore all of the
 # twenty-* themes by default. Any other Composer-managed themes should be
 # added to this list.
-web/app/themes/twenty*
+web/app/themes/*
+!web/app/themes/custom
 
 # Private files
 # We want to ignore files inside web/private/ by default, but we don't want to
@@ -80,6 +82,13 @@ web/app/themes/twenty*
 !web/private/
 web/private/*
 !web/private/config/
+
+# Quicksilver scripts
+# When using Quicksilver, custom scripts have traditionally been stored in
+# the /private/scripts directory, but composer/installers will put QS scripts
+# into /private/scripts/quicksilver.
+!web/private/scripts/
+web/private/scripts/quicksilver
 
 # Autoloader
 # This file loads the Composer autoloader and is moved to the root directory by
