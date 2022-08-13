@@ -141,6 +141,7 @@ class PANTHEON_SE_PLUGIN_CLI
 
         $body = wp_remote_retrieve_body($request);
         $data = json_decode($body, true);
+        WP_CLI::debug($data);
         if (!empty($data['photos'])) {
             return $data['photos'];
         } else {
