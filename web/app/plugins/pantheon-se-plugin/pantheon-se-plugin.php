@@ -64,7 +64,7 @@ class PANTHEON_SE_PLUGIN_CLI
      * default: food
      * ---
      *
-     * * [--num_posts=<num_posts>]
+     * [--num_posts=<num_posts>]
      * : The number of posts to generate (max 50).
      * ---
      * default: 20
