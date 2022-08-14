@@ -16,9 +16,9 @@ use function WP_CLI\Utils\make_progress_bar;
  */
 class PANTHEON_SE_PLUGIN_CLI
 {
-    private string $image_url = 'https://api.pexels.com/v1/search';
+    private string $image_api = 'https://api.pexels.com/v1';
     private string $image_api_key = '563492ad6f917000010000012cfd6eeb3c6043c5958d92cfff1a1681';
-    private string $text_url = 'https://transformer.huggingface.co/autocomplete/gpt';
+    private string $text_api = 'https://transformer.huggingface.co/autocomplete/gpt';
 
     /**
      * Prints a greeting.
@@ -61,7 +61,7 @@ class PANTHEON_SE_PLUGIN_CLI
      * [--query=<query>]
      * : A category to generate content from.
      * ---
-     * default: food
+     * default: restaurant
      * ---
      *
      * [--num_posts=<num_posts>]
@@ -79,12 +79,12 @@ class PANTHEON_SE_PLUGIN_CLI
      * @param Array $args Arguments in array format.
      * @param Array $assoc_args Key value arguments stored in associated array format.
      */
-    public function generate($args, $assoc_args)
+    public function generate(array $args, array $assoc_args)
     {
 
         // Get Post Details.
         $num_posts = (int)$assoc_args['num_posts'];
-        $query = (string)$assoc_args['query'];
+        $query = (!empty($assoc_args['query'])) ? (string)$assoc_args['query'] : null;
 
         if ($num_posts > 50) {
             WP_CLI::error('You cannot create more than 50 posts.');
@@ -92,13 +92,19 @@ class PANTHEON_SE_PLUGIN_CLI
 
         $progress = make_progress_bar('Generating Posts', $num_posts);
         $post_data = $this->get_images($query, $num_posts);
+        $post_count = count($post_data);
+        $posts = [];
 
-        for ($i = 0; $i < $num_posts; $i++) {
+        foreach ($post_data as $image) {
+            // If no text, skip.
+            if (empty($image['alt'])) {
+                $post_count--;
+                continue;
+            }
 
-            $image = $post_data[$i];
             // Code used to generate a post.
             $my_post = [
-                'post_title' => sanitize_title($image['alt']),
+                'post_title' => $image['alt'],
                 'post_status' => 'publish',
                 'post_author' => $this->create_user($image),
                 'post_type' => 'post',
@@ -109,29 +115,42 @@ class PANTHEON_SE_PLUGIN_CLI
             // Insert the post into the database.
             $post_id = wp_insert_post($my_post);
             $this->attach_image($post_id, $image);
-            WP_CLI::success("Generated post: ${image['alt']}");
+
+            $posts[] = array_merge(['id' => $post_id], $my_post);
+
+            // Debug
+            WP_CLI::debug("Generated post: ${image['alt']}", __CLASS__ . "->" . __FUNCTION__);
 
             $progress->tick();
         }
 
         $progress->finish();
-        WP_CLI::success($num_posts . ' posts generated!'); // Prepends Success to message
+
+        WP_CLI::success($post_count . ' posts generated!'); // Prepends Success to message
+        WP_CLI\Utils\format_items('table', $posts, ['id', 'post_title']);
     }
 
     /**
      * Generate random images.
      *
-     * @param string $query
+     * @param string|null $query
      * @param int $num
      * @return mixed|void
      */
-    private function get_images(string $query = 'food', int $num = 20)
+    private function get_images(string $query = null, int $num = 20)
     {
-        $query = sanitize_text_field($query);
-        $url = $this->image_url . http_build_query(['query' => $query, 'per_page' => $num]);
-        $request = wp_safe_remote_get($url, [
+        if (empty($query)) {
+            $url = $this->image_api . '/curated?' . http_build_query(['per_page' => $num]);
+        } else {
+            $query = sanitize_text_field($query);
+            $url = $this->image_api . '/search?' . http_build_query(['query' => $query, 'per_page' => $num]);
+        }
+
+        WP_CLI::debug("image url: " . $url, __CLASS__ . "->" . __FUNCTION__);
+        $request = wp_remote_get($url, [
             'headers' => [
-                "Authorization" => $this->image_api_key
+                "Authorization" => $this->image_api_key,
+                "Content-Type" => "application/json"
             ]
         ]);
 
@@ -141,13 +160,12 @@ class PANTHEON_SE_PLUGIN_CLI
 
         $body = wp_remote_retrieve_body($request);
         $data = json_decode($body, true);
-        WP_CLI::debug($data);
+
         if (!empty($data['photos'])) {
             return $data['photos'];
         } else {
             WP_CLI::error("No photos available for \"$query\", choose a new query.");
         }
-
     }
 
     /**
@@ -160,20 +178,28 @@ class PANTHEON_SE_PLUGIN_CLI
         $username = $image['photographer'];
         $url = $image['photographer_url'];
         $ID = $image['photographer_id'];
-        $user = get_user_by($ID);
+        WP_CLI::debug((string)$ID, __CLASS__ . "->" . __FUNCTION__);
+
+        $user_login = wp_slash(sanitize_title($username));
+        $user = get_user_by('login', $user_login);
+
         if (!$user) {
             // Prepare userdata.
-            $user_login = wp_slash(sanitize_title($username));
             $user_email = wp_slash($user_login . '@example.com');
             $user_pass = wp_generate_password();
             $display_name = $username;
             $user_url = $url;
 
-            $userdata = compact('user_login', 'user_email', 'user_pass', 'user_url', 'display_name', 'ID');
+            $userdata = compact('user_login', 'user_email', 'user_pass', 'user_url', 'display_name');
+            WP_CLI::debug(json_encode($userdata, JSON_PRETTY_PRINT), __CLASS__ . "->" . __FUNCTION__);
+
             $wp_user = wp_insert_user($userdata);
+
             if (!is_wp_error($wp_user)) {
+                WP_CLI::debug("new user: " . $wp_user, __CLASS__ . "->" . __FUNCTION__);
                 return $wp_user;
             } else {
+                WP_CLI::debug(json_encode($wp_user, JSON_PRETTY_PRINT), __CLASS__ . "->" . __FUNCTION__);
                 return 1;
             }
         } else {
@@ -182,53 +208,22 @@ class PANTHEON_SE_PLUGIN_CLI
     }
 
     /**
-     * @param $post_id
      * @param $image
-     * @return void
+     * @return mixed|string
      */
-    protected function attach_image($post_id, $image)
-    {
-        $image_name = $image['alt'];
-        $image_url = $image['src']['large'];
-
-        // Prepare upload image to WordPress Media Library
-        $upload = wp_upload_bits($image_name, null, file_get_contents($image_url));
-
-        // check and return file type
-        $image_file = $upload['file'];
-        $wpFileType = wp_check_filetype($image_file);
-
-        // Attachment attributes for file
-        $attachment = array(
-            'post_mime_type' => $wpFileType['type'],  // file type
-            'post_title' => sanitize_file_name($image_file),  // sanitize and use image name as file name
-            'post_content' => '',  // could use the image description here as the content
-            'post_status' => 'inherit'
-        );
-
-        // Create attachment
-        $attachment_id = wp_insert_attachment($attachment, $image_file, $post_id);
-        $attachment_data = wp_generate_attachment_metadata($attachment_id, $image_file);
-        wp_update_attachment_metadata($attachment_id, $attachment_data);
-        if (set_post_thumbnail($post_id, $attachment_id)) {
-            WP_CLI::success("Attachment $image_name added to #$post_id");
-        } else {
-            WP_CLI::error("Error adding attachment to #$post_id");
-        }
-
-    }
-
     protected function get_text($image)
     {
         $text = $image['alt'];
-        $endpoint = $this->text_url;
+        WP_CLI::debug($text, __CLASS__ . "->" . __FUNCTION__);
+
+        $endpoint = $this->text_api;
 
         $body = [
             "context" => $text,
             "model_size" => "gpt",
-            "top_p" => 5,
-            "temperature" => 5,
-            "max_time" => 2
+            "top_p" => 3,
+            "temperature" => 3,
+            "max_time" => 1
         ];
 
         $body = wp_json_encode($body);
@@ -248,17 +243,77 @@ class PANTHEON_SE_PLUGIN_CLI
 
         $body = wp_remote_retrieve_body($request);
         $data = json_decode($body, true);
-        if (!empty($data['sentences'])) {
+        if (!empty($data['sentences'] && is_array($data['sentences']))) {
+            WP_CLI::debug(json_encode($data['sentences'], JSON_PRETTY_PRINT), __CLASS__ . "->" . __FUNCTION__);
+
             $parts = [];
             foreach ($data['sentences'] as $sentence) {
                 $parts[] = $text . $sentence['value'];
             }
             return join(" ", $parts);
-        } {
-            WP_CLI::error("Could not fetch sentences.");
+        }
+        {
+            return $text;
+        }
     }
 
+    /**
+     * @param $post_id
+     * @param $image
+     * @return void
+     */
+    protected function attach_image($post_id, $image)
+    {
+        $image_name = $image['alt'];
+        $image_url = $image['src']['large'];
+        WP_CLI::debug($image_url, __CLASS__ . "->" . __FUNCTION__);
 
+        // Download image
+        $temp_file = download_url($image_url);
+        WP_CLI::debug($temp_file, __CLASS__ . "->" . __FUNCTION__);
+
+        if (is_wp_error($temp_file)) {
+            return false;
+        }
+
+        // Move the temp file into the uploads directory.
+        $image_url = parse_url($image_url);
+        $file = [
+            'name' => basename($image_url['path']),
+            'type' => mime_content_type($temp_file),
+            'tmp_name' => $temp_file,
+            'size' => filesize($temp_file),
+        ];
+
+        $sideload = wp_handle_sideload($file, ['test_form' => false]);
+
+        // Check error
+        if (!empty($sideload['error'])) {
+            WP_CLI::error($sideload['error']);
+        }
+
+        // Add image into media library
+        $attachment = [
+            'guid' => $sideload['url'],
+            'post_mime_type' => $sideload['type'],
+            'post_title' => basename($sideload['file']),
+            'post_content' => $image['alt'],
+            'post_status' => 'inherit',
+        ];
+
+        // Create attachment
+        $attachment_id = wp_insert_attachment($attachment, $sideload['file'], $post_id);
+        if (is_wp_error($attachment_id) || !$attachment_id) {
+            return false;
+        }
+
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $sideload['file']);
+        wp_update_attachment_metadata($attachment_id, $attachment_data);
+        if (set_post_thumbnail($post_id, $attachment_id)) {
+            WP_CLI::debug("Attachment $image_name added to #$post_id", __CLASS__ . "->" . __FUNCTION__);
+        } else {
+            WP_CLI::error("Error adding attachment to #$post_id");
+        }
     }
 }
 
