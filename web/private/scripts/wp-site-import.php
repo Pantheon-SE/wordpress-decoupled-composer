@@ -1,6 +1,7 @@
 <?php
 
 $categories = [
+    'health',
     'restaurant',
     'fitness',
     'lifestyle',
@@ -12,6 +13,7 @@ $categories = [
     'texas',
     'california',
     'michigan',
+    'florida',
 ];
 
 $category = array_rand($categories);
