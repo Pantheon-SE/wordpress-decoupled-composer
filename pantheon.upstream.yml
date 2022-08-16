@@ -11,3 +11,21 @@ protected_web_paths:
   - /app/uploads/private/
   - /private/
   - /xmlrpc.php
+
+# Quicksilver scripts
+workflows:
+  # New site creation
+  deploy_product:
+    after:
+      - description: "Pause for converge"
+        script: private/scripts/wp-sleep.php
+        type: webphp
+      - description: "Install WordPress core"
+        script: private/scripts/wp-site-install.php
+        type: webphp
+      - description: "Install plugins"
+        script: private/scripts/wp-site-setup.php
+        type: webphp
+      - description: "Import default content"
+        script: private/scripts/wp-site-import.php
+        type: webphp
