@@ -51,7 +51,8 @@
     "wpackagist-plugin/pantheon-advanced-page-cache": "^1.0",
     "wpackagist-plugin/wp-native-php-sessions": "^1.2",
     "wp-graphql/wp-graphql": "^1.9",
-    "pantheon-se/pantheon-se-plugin": "dev-main"
+    "pantheon-se/pantheon-se-plugin": "dev-main",
+    "wpackagist-theme/oceanwp": "^3.3"
   },
   "require-dev": {
     "squizlabs/php_codesniffer": "^3.6.2",
