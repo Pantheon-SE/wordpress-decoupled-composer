@@ -19,4 +19,6 @@ $page = rand(1,5);
 
 // Import data into WordPress
 echo "Installing random content...\n";
-passthru("wp pantheon generate --query='$category' --page='$page'");
+$cmd = "wp pantheon generate --query=$category --page=$page";
+echo $cmd;
+passthru($cmd);
