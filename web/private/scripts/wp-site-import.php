@@ -13,7 +13,7 @@ $categories = [
     'texas',
     'california',
     'michigan',
-    'florida',
+    'florida'
 ];
 
 $category = array_rand($categories);
